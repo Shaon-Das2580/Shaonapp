@@ -189,5 +189,80 @@ def add_comment(current_user, video_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/search', methods=['GET'])
+def search_videos():
+    query = request.args.get('q', '')
+    try:
+        conn = pyodbc.connect(SQL_CONNECTION_STRING)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, title, description FROM Videos WHERE title LIKE ? OR metadata LIKE ?",
+            (f"%{query}%", f"%{query}%")
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        results = [{'id': row[0], 'title': row[1], 'description': row[2]} for row in rows]
+        return jsonify(results), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/videos/<int:video_id>', methods=['PUT'])
+@token_required
+def update_video(current_user, video_id):
+    if current_user['role'] != 'creator':
+        return jsonify({'message': 'Unauthorized access!'}), 403
+    data = request.json
+    title = data.get('title')
+    description = data.get('description')
+    try:
+        conn = pyodbc.connect(SQL_CONNECTION_STRING)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE Videos SET title = ?, description = ? WHERE id = ? AND uploaded_by = ?",
+            (title, description, video_id, current_user['id'])
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Video updated successfully!'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/videos/<int:video_id>/rate', methods=['POST'])
+@token_required
+def rate_video(current_user, video_id):
+    data = request.json
+    rating = data.get('rating')
+    if not (1 <= rating <= 5):
+        return jsonify({'error': 'Invalid rating value'}), 400
+    try:
+        conn = pyodbc.connect(SQL_CONNECTION_STRING)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO Ratings (video_id, user_id, rating) VALUES (?, ?, ?)", (video_id, current_user['id'], rating))
+        conn.commit()
+        conn.close()
+        return jsonify({'message': 'Rating added successfully!'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/videos/<int:video_id>', methods=['DELETE'])
+@token_required
+def delete_video(current_user, video_id):
+    if current_user['role'] != 'creator':
+        return jsonify({'message': 'Unauthorized access!'}), 403
+    try:
+        conn = pyodbc.connect(SQL_CONNECTION_STRING)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM Videos WHERE id = ? AND uploaded_by = ?", (video_id, current_user['id']))
+        conn.commit()
+        conn.close()
+
+        # Delete video from Blob Storage
+        container_client = blob_service_client.get_container_client("videos")
+        container_client.delete_blob(blob_name=str(video_id))
+
+        return jsonify({'message': 'Video deleted successfully!'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True)
