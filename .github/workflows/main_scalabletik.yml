@@ -66,4 +66,4 @@ jobs:
         with:
           app-name: 'ScalableTik'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_B02DDE12F7C0436D837C09EB79FC8714 }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8337368EF6634CF7A04E5767C36BB9D4 }}
